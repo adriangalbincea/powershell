@@ -75,7 +75,7 @@
 param(
     [Parameter(Mandatory = $false)]
     [String] $ISO = "download",
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [String] $License
 )
 
@@ -313,22 +313,22 @@ if ((-not $vem) -and (-not $vbr)) {
 }
 if ($vem) { Write-Log "Veeam Backup Enterprise Manager found: $($vem.Version)" }
 if ($vbr) { Write-Log "Veeam Backup & Replication Server found: $($vbr.Version)" }
-if (($vem.Version -eq "10.0.0.4461") -or ($vbr.Version -eq "10.0.0.4461")) {
-    throw "Veeam environment has already been partially upgraded to version 10.0.0.4461. As such, you cannot use this script. You must perform a manual upgrade to proceed."
+if (($vem.Version -eq "10.0.1.4854") -or ($vbr.Version -eq "10.0.1.4854")) {
+    throw "Veeam environment has already been partially upgraded to version 10.0.1.4854. As such, you cannot use this script. You must perform a manual upgrade to proceed."
 }
 
 # If ISO wasn't specified, download it from Veeam's public servers
 if ($iso -eq "download") {
     try {
-        $iso = "$logFolder\VeeamBackup&Replication_10.0.0.4461.iso"
+        $iso = "$logFolder\VeeamBackup&Replication_10.0.1.4854_20200723.iso"
         Write-Log "ISO not specified. Checking if previously downloaded..."
         if (Test-Path $iso) {
             Write-Log "ISO found: $iso"
         }
         else {
             Write-Log "ISO not found. Downloading ISO now..."
-            Start-BitsTransfer -Source "https://download2.veeam.com/VeeamBackup&Replication_10.0.0.4461.iso" -Destination $iso
-            Write-Log "ISO downloaded to: $logFolder\VeeamBackup&Replication_10.0.0.4461.iso"
+            Start-BitsTransfer -Source "https://download2.veeam.com/VeeamBackup&Replication_10.0.1.4854_20200723.iso" -Destination $iso
+            Write-Log "ISO downloaded to: $logFolder\VeeamBackup&Replication_10.0.1.4854_20200723.iso"
         }
         
     }
@@ -341,8 +341,8 @@ if ($iso -eq "download") {
 # Mounting ISO
 try {
     Write-Log "Mounting ISO in Operating System"
-    $mount = Mount-DiskImage -ImagePath $iso
-    $mountDrive = ($mount | Get-Volume).DriveLetter + ":"
+    $mount = Mount-DiskImage -ImagePath $iso -StorageType ISO
+    $mountDrive = (Get-DiskImage -ImagePath $iso | Get-Volume).DriveLetter + ":"
 }
 catch {
     Write-Log $_
@@ -423,7 +423,7 @@ if ($vbr) {
     catch {
         Write-Log "One of the pre-upgrade actions failed. Please investigate and resolve. Logs can be found here: $logFile"
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "ERROR: Upgrade halted. Please check logs for more information."
     }
 }
@@ -443,13 +443,13 @@ if ($vem) {
         # Upgrading Veeam Backup Catalog
         Write-Log "Upgrading Veeam Backup Catalog: $mountDrive\Catalog\VeeamBackupCatalog64.msi"
         $result = Update-Package -msi "$mountDrive\Catalog\VeeamBackupCatalog64.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamBackupCatalog64.log"
     }
     
@@ -457,13 +457,13 @@ if ($vem) {
         # Upgrading Veeam Backup Enterprise Manager
         Write-Log "Upgrading Veeam Backup Enterprise Manager: $mountDrive\EnterpriseManager\BackupWeb_x64.msi"
         $result = Update-VEM -msi "$mountDrive\EnterpriseManager\BackupWeb_x64.msi" -license $license
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\EnterpriseManager.log"
     }
 
@@ -473,13 +473,13 @@ if ($vem) {
             # Upgrading Veeam Cloud Connect Portal
             Write-Log "Upgrading Veeam Cloud Connect Portal: $mountDrive\Cloud Portal\BackupCloudPortal_x64.msi"
             $result = Update-Package -msi "$mountDrive\Cloud Portal\BackupCloudPortal_x64.msi"
-            if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+            if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
             else { throw "ERROR: ${result}" }
         }
         catch {
             Write-Log $_
             Write-Log "Unmounting Veeam ISO"
-            $mount | Dismount-DiskImage | Out-Null
+            Dismount-DiskImage -ImagePath $iso
             throw "Upgrade failed. Please check debug log for more information: $logFolder\BackupCloudPortal_x64.log"
         }
     }
@@ -501,13 +501,13 @@ if ($vbr) {
         # Upgrading Veeam Backup Catalog
         Write-Log "Upgrading Veeam Backup Catalog: $mountDrive\Catalog\VeeamBackupCatalog64.msi"
         $result = Update-Package -msi "$mountDrive\Catalog\VeeamBackupCatalog64.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamBackupCatalog64.log"
     }
     
@@ -515,13 +515,13 @@ if ($vbr) {
         # Upgrading Veeam Backup & Replication Server
         Write-Log "Upgrading Veeam Backup & Replication Server: $mountDrive\Backup\Server.x64.msi"
         $result = Update-VBR  -msi "$mountDrive\Backup\Server.x64.msi" -license $license
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\BackupServer.log"
     }
     
@@ -532,13 +532,13 @@ if ($vbr) {
         # Upgrading Veeam Backup & Replication Console
         Write-Log "Upgrading Veeam Backup & Replication Console: $mountDrive\Backup\Shell.x64.msi"
         $result = Update-Package -msi "$mountDrive\Backup\Shell.x64.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\Shell.x64.log"
     }
     
@@ -546,13 +546,13 @@ if ($vbr) {
         # Upgrading Veeam Explorer for Microsoft Active Directory
         Write-Log "Upgrading Veeam Explorer for Microsoft Active Directory: $mountDrive\Explorers\VeeamExplorerForActiveDirectory.msi"
         $result = Update-Explorer -msi "$mountDrive\Explorers\VeeamExplorerForActiveDirectory.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamExplorerForActiveDirectory.log"
     }
     
@@ -560,13 +560,13 @@ if ($vbr) {
         # Upgrading Veeam Explorer for Microsoft Exchange
         Write-Log "Upgrading Veeam Explorer for Microsoft Exchange: $mountDrive\Explorers\VeeamExplorerForExchange.msi"
         $result = Update-Explorer -msi "$mountDrive\Explorers\VeeamExplorerForExchange.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamExplorerForExchange.log"
     }
     
@@ -574,13 +574,13 @@ if ($vbr) {
         # Upgrading Veeam Explorer for Microsoft SharePoint
         Write-Log "Upgrading Veeam Explorer for Microsoft SharePoint: $mountDrive\Explorers\VeeamExplorerForSharePoint.msi"
         $result = Update-Explorer -msi "$mountDrive\Explorers\VeeamExplorerForSharePoint.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamExplorerForSharePoint.log"
     }
     
@@ -588,13 +588,13 @@ if ($vbr) {
         # Upgrading Veeam Explorer for Microsoft SQL Server
         Write-Log "Upgrading Veeam Explorer for Microsoft SQL Server: $mountDrive\Explorers\VeeamExplorerForSQL.msi"
         $result = Update-Explorer -msi "$mountDrive\Explorers\VeeamExplorerForSQL.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamExplorerForSQL.log"
     }
     
@@ -602,13 +602,13 @@ if ($vbr) {
         # Upgrading Veeam Explorer for Oracle
         Write-Log "Upgrading Veeam Explorer for Oracle: $mountDrive\Explorers\VeeamExplorerForOracle.msi"
         $result = Update-Explorer -msi "$mountDrive\Explorers\VeeamExplorerForOracle.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamExplorerForOracle.log"
     }
     
@@ -616,13 +616,13 @@ if ($vbr) {
         # Upgrading Veeam Distribution Service
         Write-Log "Upgrading Veeam Distribution Service: $mountDrive\Packages\VeeamDistributionSvc.msi"
         $result = Update-Package -msi "$mountDrive\Packages\VeeamDistributionSvc.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamDistributionSvc.log"
     }
     
@@ -630,13 +630,13 @@ if ($vbr) {
         # Upgrading Veeam Installer Service
         Write-Log "Upgrading Veeam Installer Service: $mountDrive\Packages\VeeamInstallerSvc.msi"
         $result = Update-Package -msi "$mountDrive\Packages\VeeamInstallerSvc.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamInstallerSvc.log"
     }
     
@@ -644,13 +644,13 @@ if ($vbr) {
         # Upgrading Veeam Agent for Linux Redistributable
         Write-Log "Upgrading Veeam Agent for Linux Redistributable: $mountDrive\Packages\VALRedist.msi"
         $result = Update-Package -msi "$mountDrive\Packages\VALRedist.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VALRedist.log"
     }
     
@@ -658,13 +658,13 @@ if ($vbr) {
         # Upgrading Veeam Agent for Microsoft Windows Redistributable
         Write-Log "Upgrading Veeam Agent for Microsoft Windows Redistributable: $mountDrive\Packages\VAWRedist.msi"
         $result = Update-Package -msi "$mountDrive\Packages\VAWRedist.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VAWRedist.log"
     }
     
@@ -672,13 +672,13 @@ if ($vbr) {
         # Upgrading Veeam Mount Service
         Write-Log "Upgrading Veeam Mount Service: $mountDrive\Packages\VeeamMountService.msi"
         $result = Update-Package -msi "$mountDrive\Packages\VeeamMountService.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamMountService.log"
     }
     
@@ -686,13 +686,13 @@ if ($vbr) {
         # Upgrading Veeam Backup Transport
         Write-Log "Upgrading Veeam Backup Transport: $mountDrive\Packages\VeeamTransport.msi"
         $result = Update-Package -msi "$mountDrive\Packages\VeeamTransport.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamTransport.log"
     }
     
@@ -700,13 +700,13 @@ if ($vbr) {
         # Upgrading Veeam Backup vPowerNFS
         Write-Log "Upgrading Veeam Backup vPowerNFS: $mountDrive\Packages\vPowerNFS.msi"
         $result = Update-Package -msi "$mountDrive\Packages\vPowerNFS.msi"
-        if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+        if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
         else { throw "ERROR: ${result}" }
     }
     catch {
         Write-Log $_
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "Upgrade failed. Please check debug log for more information: $logFolder\vPowerNFS.log"
     }
 
@@ -716,13 +716,13 @@ if ($vbr) {
             # Upgrading Veeam Backup Cloud Gateway
             Write-Log "Upgrading Veeam Backup Cloud Gateway: $mountDrive\Packages\VeeamGateSvc.msi"
             $result = Update-Package -msi "$mountDrive\Packages\VeeamGateSvc.msi" -license $license
-            if ($result -eq 0) { Write-Log "SUCCESS: ${result}" }
+            if ($result -eq 0 -or $result -eq 3010) { Write-Log "SUCCESS: ${result}" }
             else { throw "ERROR: ${result}" }
         }
         catch {
             Write-Log $_
             Write-Log "Unmounting Veeam ISO"
-            $mount | Dismount-DiskImage | Out-Null
+            Dismount-DiskImage -ImagePath $iso
             throw "Upgrade failed. Please check debug log for more information: $logFolder\VeeamGateSvc.log"
         }
     }
@@ -749,6 +749,10 @@ if ($vbr) {
             powershell.exe -NoLogo -ExecutionPolicy bypass -NoProfile -Command 'Add-PSSnapin VeeamPSSnapin; Get-VBRJob | Stop-VBRJob'
         }
 
+        # Enabling Backup Jobs
+
+        Import-Csv $csv | Enable-VBRJob -Job { $_.Name }
+
         # Stopping Veeam services prior to reboot
         Get-Service veeam* | Stop-Service
     }
@@ -756,14 +760,15 @@ if ($vbr) {
         Write-Log $_
         Write-Log "One of the post-upgrade actions failed. Please investigate and resolve. Logs can be found here: $logFile"
         Write-Log "Unmounting Veeam ISO"
-        $mount | Dismount-DiskImage | Out-Null
+        Dismount-DiskImage -ImagePath $iso
         throw "ERROR: Post-upgrade actions failed. Please check logs for more information."
     }
     ### END POST-UPGRADE ACTIONS
 } # End VBR upgrade
 
 Write-Log "Unmounting Veeam ISO"
-$mount | Dismount-DiskImage | Out-Null
+Dismount-DiskImage -ImagePath $iso
 Write-Log "Script has completed successfully. Please reboot this server prior to using Veeam."
 Write-Host "This can be done easily in PowerShell as well: Restart-Computer -Force"
+If(test-path 'C:\temp\veeam-upgrade'){Remove-Item 'C:\temp\veeam-upgrade' -Recurse -Force}
 return 0
